@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Polar converter</title>
+		<style>
+			canvas, img { display:block; max-width: 50%; }
+			li { line-height: 1.5; }
+		</style>
+	</head>
+	<body>
+		<h1>Rect-to-polar image converter</h1>
+		<ol>
+			<li>Pick an image file: <input type="file" />
+				<ul>
+					<li>Alternatively, give me your image's URL:
+						<form><input type="text" value="test.jpg"><input type="submit" /></form>
+					</li>
+				</ul>
+			</li>
+			<li>This is the source image: <img /></li>
+			<li>Target canvas: <canvas></canvas></li>
+		</ol>
+
+		<script>
+			var image = document.querySelector("img");
+			var source = document.createElement("canvas");
+			var target = document.querySelector("canvas");
+			var sourceData, targetData;
+			var offset = 0;
+
+			document.querySelector("input[type=file]").addEventListener("change", function(e) {
+				image.src = URL.createObjectURL(e.target.files[0]);
+			})
+
+			document.querySelector("form").addEventListener("submit", function(e) {
+				e.preventDefault();
+				image.src = document.querySelector("input[type=text]").value;
+			});
+
+			image.addEventListener("load", function(e) {
+				source.width = e.target.naturalWidth;
+				source.height = e.target.naturalHeight;
+				var ctx = source.getContext("2d");
+				ctx.drawImage(e.target, 0, 0);
+				sourceData = ctx.getImageData(0, 0, source.width, source.height);
+
+				var size = 2*source.height;
+				targetData = ctx.createImageData(size, size);
+				process();
+			});
+
+			var polarToRect = function(squareX, squareY) {
+				var radius = targetData.width/2;
+				var dx = squareX - radius;
+				var dy = squareY - radius;
+				var dist = Math.sqrt(dx*dx+dy*dy);
+				if (dist >= radius) { return null; }
+
+				var y = Math.round(sourceData.height * (1-dist/radius));
+
+				var angle = (Math.atan2(dy, dx) + Math.PI + Math.PI/2) % (2*Math.PI);
+				var x = Math.round(sourceData.width * angle * 0.5/Math.PI);
+
+				return [x, y];
+			}
+
+			var positionToIndex = function(x, y, width) {
+				return 4*(y*width+x);
+			}
+
+			var process = function() {
+				var rows = 10;
+				for (var j=0;j<rows;j++) {
+					for (var i=0;i<targetData.width;i++) {
+						var targetIndex = positionToIndex(i, j+offset, targetData.width);
+
+						var sourcePosition = polarToRect(i, j+offset);
+						if (!sourcePosition) { continue; } /* transparent */
+
+						var sourceIndex = positionToIndex(sourcePosition[0], sourcePosition[1], sourceData.width);
+
+						targetData.data[targetIndex+0] = sourceData.data[sourceIndex+0];
+						targetData.data[targetIndex+1] = sourceData.data[sourceIndex+1];
+						targetData.data[targetIndex+2] = sourceData.data[sourceIndex+2];
+						targetData.data[targetIndex+3] = sourceData.data[sourceIndex+3];
+					}
+				}
+				offset += rows;
+
+				if (offset >= targetData.height) {
+					finish();
+				} else {
+					setTimeout(process, 0);
+				}
+			}
+
+			var finish = function() {
+				target.width = targetData.width;
+				target.height = targetData.height;
+				var ctx = target.getContext("2d");
+				ctx.putImageData(targetData, 0, 0);
+			}
+
+		</script>
+	</body>
+</html>
